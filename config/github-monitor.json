@@ -1,0 +1,77 @@
+{
+  "enabled": true,
+  "data_dir": "data",
+  "default_max_candidates": 3,
+  "per_page": 5,
+  "issues_per_repo": 1,
+  "deep_review_max_candidates": 3,
+  "ecosystems_enrich": true,
+  "ecosystems_max_candidates": 4,
+  "repo_digest_batch": true,
+  "repo_digest_max_candidates": 1,
+  "repo_digest_max_files": 80,
+  "repo_digest_max_bytes": 500000,
+  "repo_digest_clone_timeout_seconds": 90,
+  "total_candidate_cap": 12,
+  "send_telegram": false,
+  "write_calibration": true,
+  "write_dashboard": true,
+  "github_queries": [
+    {
+      "id": "hosted-dashboard-python",
+      "enabled": true,
+      "query": "hosted dashboard setup language:Python stars:>50 pushed:>2025-01-01",
+      "notes": "Find OSS with setup/dashboard pain that may support hosted or managed wrappers.",
+      "expected_signal": "issues or README language around hosted dashboard, setup pain, managed cloud, reports"
+    },
+    {
+      "id": "managed-deploy-typescript",
+      "enabled": false,
+      "query": "managed cloud deploy language:TypeScript stars:>50 pushed:>2025-01-01",
+      "notes": "Find deploy/setup workflows where one-click or managed versions may be valuable.",
+      "expected_signal": "deploy pain, managed cloud requests, integration friction"
+    },
+    {
+      "id": "one-click-template-javascript",
+      "enabled": true,
+      "query": "one-click deploy template language:JavaScript stars:>50 pushed:>2025-01-01",
+      "notes": "Find repeatable template/deployment opportunities with a concrete output artifact.",
+      "expected_signal": "template demand, install friction, one-click deploy language"
+    },
+    {
+      "id": "browser-extension-typescript",
+      "enabled": false,
+      "query": "browser extension API language:TypeScript stars:>50 pushed:>2025-01-01",
+      "notes": "Find extension-adjacent OSS where a polished extension or hosted dashboard could be a wedge.",
+      "expected_signal": "browser workflow pain, API usage, extension requests"
+    },
+    {
+      "id": "telegram-bot-dashboard-python",
+      "enabled": true,
+      "query": "telegram bot dashboard language:Python stars:>50 pushed:>2025-01-01",
+      "notes": "Find bot ecosystems with dashboard, hosting, analytics, or setup opportunities.",
+      "expected_signal": "bot operators asking for dashboards, hosting, templates, moderation automation"
+    },
+    {
+      "id": "discord-bot-dashboard-typescript",
+      "enabled": false,
+      "query": "discord bot dashboard language:TypeScript stars:>50 pushed:>2025-01-01",
+      "notes": "Find Discord bot products where a managed dashboard or setup layer may be sellable.",
+      "expected_signal": "operator dashboard pain, deployment support requests, recurring moderation jobs"
+    },
+    {
+      "id": "self-hosted-dashboard-go",
+      "enabled": true,
+      "query": "self hosted dashboard pricing language:Go stars:>50 pushed:>2025-01-01",
+      "notes": "Find self-hosted tools with pricing/hosted-version tension.",
+      "expected_signal": "hosted competitors, pricing pages, setup pain, managed version demand"
+    },
+    {
+      "id": "ai-layer-disabled",
+      "enabled": false,
+      "query": "ai layer dashboard language:Python stars:>100 pushed:>2025-01-01",
+      "notes": "Parked by default because broad AI queries tend to produce hype noise.",
+      "expected_signal": "only enable after narrower proof-oriented AI wrapper lanes are defined"
+    }
+  ]
+}
