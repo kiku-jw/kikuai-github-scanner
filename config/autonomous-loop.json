@@ -29,6 +29,20 @@
       "send_telegram": false
     },
     {
+      "id": "oss-bounty-radar-daily",
+      "type": "oss-bounty-radar",
+      "enabled": true,
+      "interval_hours": 24,
+      "external_command": ["../oss-bounty-radar/scripts/run_radar.sh"],
+      "input": "../oss-bounty-radar/reports/latest.json",
+      "max_candidates": 5,
+      "min_score": 14,
+      "source_verdicts": ["candidate", "watchlist"],
+      "ingest": true,
+      "post_pipeline": false,
+      "send_telegram": false
+    },
+    {
       "id": "hn-demand-daily",
       "type": "hn-demand",
       "enabled": true,

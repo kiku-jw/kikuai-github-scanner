@@ -97,6 +97,10 @@ class LoopJob:
     reddit_sort: str
     max_posts_per_subreddit: int
     chat_id: str
+    source_input: Path
+    source_verdicts: list[str]
+    min_score: int
+    external_command: list[str]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -304,7 +308,7 @@ def load_loop_config(path: Path) -> LoopConfig:
             raise LoopConfigError(f"Duplicate job id: {job_id}")
         job_ids.add(job_id)
         job_type = text_value(item.get("type"), f"jobs[{index}].type", required=True)
-        if job_type not in {"github-monitor", "hn-demand", "reddit-demand", "telegram-feedback"}:
+        if job_type not in {"github-monitor", "hn-demand", "reddit-demand", "telegram-feedback", "oss-bounty-radar"}:
             raise LoopConfigError(f"Unsupported job type for {job_id}: {job_type}")
         reddit_sort = text_value(item.get("sort", "hot"), f"jobs[{index}].sort") or "hot"
         if reddit_sort not in REDDIT_ALLOWED_SORTS:
@@ -380,6 +384,14 @@ def load_loop_config(path: Path) -> LoopConfig:
                     allow_zero=True,
                 ),
                 chat_id=text_value(item.get("chat_id"), f"jobs[{index}].chat_id"),
+                source_input=Path(text_value(item.get("input", item.get("source_input", "")), f"jobs[{index}].input")),
+                source_verdicts=text_list(
+                    item.get("source_verdicts", item.get("verdicts")),
+                    f"jobs[{index}].source_verdicts",
+                    ["candidate", "watchlist"],
+                ),
+                min_score=positive_int(item.get("min_score", 14), f"jobs[{index}].min_score", allow_zero=True),
+                external_command=text_list(item.get("external_command"), f"jobs[{index}].external_command", []),
             )
         )
 
@@ -1022,6 +1034,49 @@ def run_telegram_feedback_job(
     return records
 
 
+def run_oss_bounty_radar_job(
+    job: LoopJob,
+    week: str,
+    loop_config: LoopConfig,
+    send_requested: bool,
+    runner: object,
+    env: dict[str, str],
+    secrets: list[str],
+) -> list[dict[str, object]]:
+    data_dir = repo_path(loop_config.data_dir)
+    if not str(job.source_input):
+        return [synthetic_success_record("oss-bounty-radar", {"skipped": True, "reason": "missing-input"})]
+    commands: list[tuple[str, list[str]]] = []
+    if job.external_command:
+        commands.append(("oss-bounty-radar-scan", job.external_command))
+    import_command = scanner_command(
+        data_dir,
+        week,
+        "oss-bounty-radar",
+        "--input",
+        str(repo_path(job.source_input)),
+        "--max-candidates",
+        str(job.max_candidates),
+        "--min-score",
+        str(job.min_score),
+        "--verdicts",
+        *job.source_verdicts,
+    )
+    if job.ingest:
+        import_command.append("--ingest")
+    commands.append(("oss-bounty-radar", import_command))
+    if job.ingest and job.post_pipeline:
+        append_analysis_post_pipeline_commands(commands, data_dir, week, job, loop_config, send_requested)
+    records: list[dict[str, object]] = []
+    for name, command in commands:
+        try:
+            records.append(run_command(name, command, runner, env, secrets))
+        except LoopStepError as exc:
+            records.append(exc.record)
+            raise LoopJobError(str(exc), records) from exc
+    return records
+
+
 def run_job(
     job: LoopJob,
     week: str,
@@ -1039,6 +1094,8 @@ def run_job(
         return run_reddit_demand_job(job, week, loop_config, send_requested, runner, env, secrets)
     if job.job_type == "telegram-feedback":
         return run_telegram_feedback_job(job, week, loop_config, runner, env, secrets)
+    if job.job_type == "oss-bounty-radar":
+        return run_oss_bounty_radar_job(job, week, loop_config, send_requested, runner, env, secrets)
     raise LoopRunError(f"Unsupported job type: {job.job_type}")
 
 
@@ -1209,6 +1266,7 @@ def run_health_summary(payload: dict[str, object]) -> dict[str, object]:
     reddit_counts = {"posts": 0, "comments": 0, "candidates": 0}
     enrichment_counts = {"candidate_count": 0, "enrichment_count": 0, "written_count": 0}
     repo_digest_counts = {"candidate_count": 0, "digested_count": 0, "failed_count": 0, "dry_runs": 0}
+    oss_bounty_counts = {"candidate_count": 0, "skipped_count": 0}
     telegram_counts = {"dry_runs": 0, "sent_messages": 0, "skipped_empty": 0}
     feedback_counts = {"decisions_written": 0, "ignored": 0, "callbacks_answered": 0, "filter_updates": 0}
     for command in commands:
@@ -1239,6 +1297,9 @@ def run_health_summary(payload: dict[str, object]) -> dict[str, object]:
             repo_digest_counts["failed_count"] += int_value(stdout.get("failed_count"))
             if stdout.get("dry_run"):
                 repo_digest_counts["dry_runs"] += 1
+        if command.get("name") == "oss-bounty-radar":
+            oss_bounty_counts["candidate_count"] += int_value(stdout.get("candidate_count"))
+            oss_bounty_counts["skipped_count"] += int_value(stdout.get("skipped_count"))
         if str(command.get("name")).startswith("send-telegram-digest"):
             if stdout.get("dry_run"):
                 telegram_counts["dry_runs"] += 1
@@ -1264,6 +1325,7 @@ def run_health_summary(payload: dict[str, object]) -> dict[str, object]:
         "reddit_counts": reddit_counts,
         "enrichment_counts": enrichment_counts,
         "repo_digest_counts": repo_digest_counts,
+        "oss_bounty_counts": oss_bounty_counts,
         "telegram_counts": telegram_counts,
         "feedback_counts": feedback_counts,
         "failure_issue_notifications": len(notification_rows),

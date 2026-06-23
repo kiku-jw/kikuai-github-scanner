@@ -2951,6 +2951,128 @@ def run_reddit_demand(
     return response
 
 
+def github_repository_from_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.netloc.lower() != "github.com":
+        return ""
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2:
+        return ""
+    return f"{parts[0]}/{parts[1]}"
+
+
+def oss_bounty_candidate_from_task(task: dict[str, object], generated_at: str) -> dict[str, object]:
+    url = normalize_url(task.get("url"))
+    title = normalize_text(task.get("title")) or "Untitled bounty"
+    source = normalize_text(task.get("source")) or "unknown"
+    platform = normalize_text(task.get("platform")) or source
+    project = normalize_text(task.get("project")) or normalize_text(task.get("repo")) or platform
+    repository = normalize_text(task.get("repo")) or github_repository_from_url(url)
+    verdict = normalize_text(task.get("verdict")) or "unknown"
+    total_score = task.get("total_score") if isinstance(task.get("total_score"), int) else 0
+    amount = task.get("amount_usd")
+    amount_label = f"${amount}" if isinstance(amount, (int, float)) else "unknown amount"
+    candidate_seed = f"oss-bounty-radar|{url or source}|{title}"
+    candidate_id = f"cand_{hashlib.sha256(candidate_seed.encode('utf-8')).hexdigest()[:16]}"
+    score_parts = task.get("score_parts") if isinstance(task.get("score_parts"), dict) else {}
+    tags = task.get("tags") if isinstance(task.get("tags"), list) else []
+    metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+    state = task.get("state") if isinstance(task.get("state"), dict) else {}
+    return {
+        "candidate_id": candidate_id,
+        "observed_at": generated_at,
+        "source": "oss-bounty-radar",
+        "source_url": url,
+        "project_url": url,
+        "project_name": project,
+        "repository": repository,
+        "license": "unknown",
+        "short_description": f"Paid OSS bounty from {platform}: {title}",
+        "raw_metadata": {
+            "amount_usd": amount,
+            "currency": normalize_text(task.get("currency")),
+            "language": normalize_text(task.get("language")),
+            "platform": platform,
+            "radar_source": source,
+            "radar_verdict": verdict,
+            "radar_total_score": total_score,
+            "score_parts": score_parts,
+            "status": normalize_text(task.get("status")),
+            "tags": tags,
+            "source_generated_at": generated_at,
+            "radar_metadata": metadata,
+            "radar_state": state,
+        },
+        "raw_text": {
+            "readme_excerpt": "",
+            "issue_excerpts": [
+                f"{title} ({amount_label}; radar score {total_score}; verdict {verdict})",
+            ],
+            "discussion_excerpts": [],
+            "marketplace_or_store_text": f"{platform} paid OSS bounty, {amount_label}, score {total_score}.",
+            "external_mentions": [url] if url else [],
+        },
+        "search_lanes": {
+            "commercial_intent_density": True,
+            "demand_pain_cluster": True,
+        },
+        "collector_notes": (
+            "Imported from oss-bounty-radar. Treat as paid-output opportunity; "
+            "manual source and scope review still required before work starts."
+        ),
+    }
+
+
+def run_oss_bounty_radar_import(
+    data_dir: Path,
+    week: str,
+    input_path: Path,
+    output_path: Path,
+    max_candidates: int,
+    min_score: int,
+    verdicts: list[str],
+    ingest: bool,
+) -> dict[str, object]:
+    payload = json.loads(input_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected oss-bounty-radar JSON object at {input_path}")
+    raw_tasks = payload.get("tasks")
+    if not isinstance(raw_tasks, list):
+        raise ValueError(f"Expected tasks list in oss-bounty-radar JSON at {input_path}")
+    generated_at = normalize_text(payload.get("generated_at")) or utc_now()
+    allowed_verdicts = {normalize_text(verdict) for verdict in verdicts if normalize_text(verdict)}
+    candidates: list[dict[str, object]] = []
+    skipped = 0
+    for item in raw_tasks:
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
+        verdict = normalize_text(item.get("verdict"))
+        score = item.get("total_score") if isinstance(item.get("total_score"), int) else 0
+        if allowed_verdicts and verdict not in allowed_verdicts:
+            skipped += 1
+            continue
+        if score < min_score:
+            skipped += 1
+            continue
+        candidates.append(oss_bounty_candidate_from_task(item, generated_at))
+        if max_candidates and len(candidates) >= max_candidates:
+            break
+    write_jsonl(output_path, candidates)
+    result: dict[str, object] = {
+        "input_path": str(input_path),
+        "output_path": str(output_path),
+        "input_count": len(raw_tasks),
+        "candidate_count": len(candidates),
+        "skipped_count": skipped,
+        "verdicts": sorted(allowed_verdicts),
+        "min_score": min_score,
+    }
+    if ingest:
+        result["ingest"] = ingest_candidates(output_path, data_dir, week)
+    return result
+
+
 def ingest_candidates(input_path: Path, data_dir: Path, week: str) -> dict[str, object]:
     observed_at = utc_now()
     paths = ensure_layout(data_dir, week)
@@ -6721,6 +6843,20 @@ def build_parser() -> argparse.ArgumentParser:
     reddit_parser.add_argument("--max-candidates", type=non_negative_int, default=3, help="Maximum strong clusters to emit as candidates")
     reddit_parser.set_defaults(command="reddit-demand")
 
+    oss_bounty_parser = subparsers.add_parser("oss-bounty-radar", help="Import oss-bounty-radar JSON into the opportunity ledger")
+    oss_bounty_parser.add_argument("--input", required=True, help="oss-bounty-radar latest.json or history JSON")
+    oss_bounty_parser.add_argument("--output", help="Output JSONL path; defaults to data/sources/oss-bounty-radar/<week>-candidates.jsonl")
+    oss_bounty_parser.add_argument("--ingest", action="store_true", help="Ingest imported bounty candidates into the local ledger")
+    oss_bounty_parser.add_argument("--max-candidates", type=non_negative_int, default=5, help="Maximum bounty candidates to import")
+    oss_bounty_parser.add_argument("--min-score", type=non_negative_int, default=14, help="Minimum oss-bounty-radar score to import")
+    oss_bounty_parser.add_argument(
+        "--verdicts",
+        nargs="+",
+        default=["candidate", "watchlist"],
+        help="oss-bounty-radar verdicts to import",
+    )
+    oss_bounty_parser.set_defaults(command="oss-bounty-radar")
+
     telegram_feedback_parser = subparsers.add_parser("telegram-feedback", help="Apply Operator feedback from Telegram commands or callback buttons")
     telegram_feedback_parser.add_argument("--dry-run", action="store_true", help="Parse updates without writing ledger state")
     telegram_feedback_parser.add_argument("--input", help="Read Telegram getUpdates JSON from a file instead of polling the API")
@@ -6963,6 +7099,21 @@ def main(argv: list[str]) -> int:
             max_total_items=args.max_total_items,
             max_clusters=args.max_clusters,
             max_candidates=args.max_candidates,
+            ingest=bool(args.ingest),
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
+
+    if args.command == "oss-bounty-radar":
+        output_path = Path(args.output) if args.output else data_dir / "sources" / "oss-bounty-radar" / f"{week}-candidates.jsonl"
+        result = run_oss_bounty_radar_import(
+            data_dir=data_dir,
+            week=week,
+            input_path=Path(args.input),
+            output_path=output_path,
+            max_candidates=args.max_candidates,
+            min_score=args.min_score,
+            verdicts=args.verdicts,
             ingest=bool(args.ingest),
         )
         print(json.dumps(result, sort_keys=True))

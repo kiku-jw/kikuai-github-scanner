@@ -1,0 +1,7 @@
+Commands passed:
+
+- python3 -m unittest discover -s tests
+- python3 -m py_compile scripts/opportunity_scanner.py scripts/run_autonomous_loop.py
+- python3 scripts/run_autonomous_loop.py --config config/autonomous-loop.json --health-check
+- python3 scripts/opportunity_scanner.py --week 2026-W26 oss-bounty-radar --input ../oss-bounty-radar/reports/latest.json --output /tmp/kikuai-github-scanner-oss-bounty-candidates-relative.jsonl --max-candidates 2 --min-score 14 --verdicts candidate watchlist
+- git diff --check

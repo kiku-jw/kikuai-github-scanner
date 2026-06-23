@@ -1,0 +1,5 @@
+{
+  "checked_at": "2026-06-23T07:10:05Z",
+  "result": "PASS",
+  "summary": "The dirty oss-bounty-radar autonomous-loop integration is coherent, tested, public-path-safe, and ready to commit."
+}

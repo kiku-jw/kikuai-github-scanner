@@ -408,6 +408,56 @@ class OpportunityScannerCliTest(unittest.TestCase):
         self.assertIn("machine-reject", report_text)
         self.assertIn("codex-review", report_text)
 
+    def test_oss_bounty_radar_imports_filtered_candidates(self) -> None:
+        report_path = self.tmp_dir / "bounty-latest.json"
+        report_path.write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-06-18T06:30:11Z",
+                    "tasks": [
+                        {
+                            "source": "opire",
+                            "platform": "Opire",
+                            "title": "Add Wayland support",
+                            "url": "https://github.com/autokey/autokey/issues/87",
+                            "amount_usd": 390.0,
+                            "currency": "USD",
+                            "project": "autokey",
+                            "language": "Python",
+                            "status": "open",
+                            "total_score": 19,
+                            "verdict": "candidate",
+                            "score_parts": {"domain_fit": 4},
+                        },
+                        {
+                            "source": "opire",
+                            "platform": "Opire",
+                            "title": "Rejected task",
+                            "url": "https://github.com/example/repo/issues/1",
+                            "amount_usd": 10.0,
+                            "project": "repo",
+                            "total_score": 5,
+                            "verdict": "reject",
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.run_cli("oss-bounty-radar", "--input", str(report_path), "--ingest")
+        payload = json.loads(result.stdout)
+
+        self.assertEqual(payload["candidate_count"], 1)
+        self.assertEqual(payload["skipped_count"], 1)
+        data_dir = self.tmp_dir / "data"
+        output_rows = self.read_jsonl(data_dir / "sources" / "oss-bounty-radar" / "2026-W23-candidates.jsonl")
+        candidates = self.read_jsonl(data_dir / "ledger" / "candidates.jsonl")
+        self.assertEqual(output_rows[0]["source"], "oss-bounty-radar")
+        self.assertEqual(output_rows[0]["repository"], "autokey/autokey")
+        self.assertEqual(candidates[0]["raw_metadata"]["radar_total_score"], 19)
+        self.assertTrue((data_dir / "ledger" / "evidence" / f"{candidates[0]['candidate_id']}.md").exists())
+
     def test_init_creates_layout(self) -> None:
         self.run_cli("init")
         data_dir = self.tmp_dir / "data"

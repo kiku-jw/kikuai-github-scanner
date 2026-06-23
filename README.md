@@ -23,6 +23,7 @@ Expected result: a local ledger and Markdown opportunity report under `data/`.
 - Collects public GitHub repositories through the GitHub REST API.
 - Collects public GitLab projects through the GitLab REST API.
 - Mines capped Hacker News and OAuth-authenticated Reddit demand signals.
+- Imports `oss-bounty-radar` reports as a paid-output source lane.
 - Normalizes candidates into an append-only local ledger.
 - Deduplicates repositories and fork families.
 - Applies deterministic hard gates and weak-label triage.
@@ -215,6 +216,22 @@ python3 scripts/opportunity_scanner.py \
 
 Reddit collection requires OAuth credentials and a descriptive `REDDIT_USER_AGENT`.
 There is no logged-out `.json` scraping fallback.
+
+Import paid-output candidates from `oss-bounty-radar`:
+
+```bash
+python3 scripts/opportunity_scanner.py \
+  --week 2026-W25 \
+  oss-bounty-radar \
+  --input ../oss-bounty-radar/reports/latest.json \
+  --ingest
+```
+
+The autonomous loop can run `../oss-bounty-radar/scripts/run_radar.sh` from a
+sibling checkout and import its `latest.json` output as `oss-bounty-radar-daily`.
+This replaces the standalone bounty LaunchAgent; the bounty source remains
+conservative and does not use the product-opportunity post-pipeline unless that
+job explicitly sets `post_pipeline: true`.
 
 Apply Telegram feedback commands/callbacks:
 

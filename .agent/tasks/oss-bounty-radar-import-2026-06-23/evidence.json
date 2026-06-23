@@ -1,0 +1,25 @@
+{
+  "acceptance_criteria": {
+    "AC1": {
+      "proof": "CLI subcommand and live-safe import smoke produced 2 candidates from 36 current radar tasks.",
+      "status": "PASS"
+    },
+    "AC2": {
+      "proof": "Autonomous loop test covers external scan command plus import command and health-summary counts.",
+      "status": "PASS"
+    },
+    "AC3": {
+      "proof": "Default config has oss-bounty-radar-daily with ingest true, post_pipeline false, send_telegram false.",
+      "status": "PASS"
+    },
+    "AC4": {
+      "proof": "grep found no new committed /Users/nick path outside the pre-existing guard assertion.",
+      "status": "PASS"
+    },
+    "AC5": {
+      "proof": "unittest, py_compile, health-check, import smoke, and diff check passed.",
+      "status": "PASS"
+    }
+  },
+  "overall": "PASS"
+}

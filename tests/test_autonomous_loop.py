@@ -39,6 +39,8 @@ class FakeRunner:
             payload = {"candidate_count": 1, "enrichment_count": 1, "written_count": 1, "dry_run": False}
         if name == "repo-digest-batch":
             payload = {"candidate_count": 1, "digested_count": 1, "failed_count": 0, "dry_run": False}
+        if name == "oss-bounty-radar":
+            payload = {"candidate_count": 2, "skipped_count": 3}
         if name == "send-telegram-digest" and "--dry-run" in command:
             payload = {"dry_run": True, "message_count": 1}
         if name == "send-telegram-digest" and "--dry-run" not in command:
@@ -92,6 +94,8 @@ class FakeFailureIssueClient:
 
 
 def command_name(command: list[str]) -> str:
+    if command and command[0].endswith("run_radar.sh"):
+        return "oss-bounty-radar-scan"
     if command[1].endswith("run_github_monitor.py"):
         return "github-monitor"
     index = command.index("--week")
@@ -468,6 +472,46 @@ class AutonomousLoopTest(unittest.TestCase):
         self.assertIn("webdev", reddit_command)
         self.assertEqual(result["health_summary"]["reddit_counts"]["candidates"], 1)
         self.assertEqual(result["health_summary"]["feedback_counts"]["decisions_written"], 1)
+
+    def test_oss_bounty_radar_job_runs_external_scan_and_import(self) -> None:
+        payload = self.base_config()
+        payload["max_jobs_per_tick"] = 1
+        payload["jobs"] = [
+            {
+                "id": "oss-bounty-radar-daily",
+                "type": "oss-bounty-radar",
+                "enabled": True,
+                "interval_hours": 24,
+                "external_command": ["../oss-bounty-radar/scripts/run_radar.sh"],
+                "input": "../oss-bounty-radar/reports/latest.json",
+                "max_candidates": 4,
+                "min_score": 14,
+                "source_verdicts": ["candidate", "watchlist"],
+                "ingest": True,
+                "post_pipeline": False,
+            }
+        ]
+        fake = FakeRunner()
+
+        result = loop.run_autonomous_loop(
+            config_path=self.write_config(payload),
+            week="2026-W24",
+            send_requested=False,
+            dry_run=False,
+            force=True,
+            runner=fake,
+            env={},
+            now=datetime.datetime(2026, 6, 13, tzinfo=datetime.timezone.utc),
+        )
+
+        names = [command_name(command) for command in fake.commands]
+        self.assertEqual(names, ["oss-bounty-radar-scan", "oss-bounty-radar"])
+        import_command = fake.commands[1]
+        self.assertIn("--ingest", import_command)
+        self.assertIn("--min-score", import_command)
+        self.assertIn("14", import_command)
+        self.assertEqual(result["health_summary"]["oss_bounty_counts"]["candidate_count"], 2)
+        self.assertEqual(result["health_summary"]["oss_bounty_counts"]["skipped_count"], 3)
 
     def test_existing_lock_blocks_run(self) -> None:
         payload = self.base_config()
