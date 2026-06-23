@@ -8,8 +8,9 @@ local ledger, applies conservative filters, writes Markdown reports, and can
 send a ready-only Telegram digest. Telegram output is intentionally restricted
 to ideas that survive the final filters.
 
-Primary CTA: run the fixture-based scanner locally before connecting live
-sources.
+**[Run the fixture scanner locally](#quick-start)**
+
+[Docs](#what-it-does) · [Examples](#quick-start) · [Reports](#quick-start)
 
 ```bash
 python3 scripts/opportunity_scanner.py --week 2026-W24 init
