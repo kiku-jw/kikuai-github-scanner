@@ -8,6 +8,16 @@ local ledger, applies conservative filters, writes Markdown reports, and can
 send a ready-only Telegram digest. Telegram output is intentionally restricted
 to ideas that survive the final filters.
 
+Primary CTA: run the fixture-based scanner locally before connecting live
+sources.
+
+```bash
+python3 scripts/opportunity_scanner.py --week 2026-W24 init
+python3 scripts/opportunity_scanner.py --week 2026-W24 run --input fixtures/manual-candidates.jsonl
+```
+
+Expected result: a local ledger and Markdown opportunity report under `data/`.
+
 ## What It Does
 
 - Collects public GitHub repositories through the GitHub REST API.
@@ -36,6 +46,18 @@ python3 scripts/opportunity_scanner.py --week 2026-W24 init
 python3 scripts/opportunity_scanner.py --week 2026-W24 run --input fixtures/manual-candidates.jsonl
 python3 -m unittest discover -s tests
 ```
+
+## Expected Output
+
+The local run writes ignored runtime artifacts such as:
+
+```text
+data/ledger/
+data/reports/
+data/runs/
+```
+
+Reports are candidate evidence, not build instructions or revenue proof.
 
 Collect and ingest public GitHub candidates:
 
