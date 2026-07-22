@@ -269,6 +269,12 @@ REDDIT_USER_AGENT=
 - `docs/opportunity-scanner-autonomous-monitor.md`
 - `docs/opportunity-filter-v3.md`
 
+## Follow the work
+
+Project notes and new tools: [Telegram](https://t.me/kiku_ai) ·
+[LinkedIn](https://www.linkedin.com/in/kiku-jw/) ·
+[KikuAI](https://kikuai.dev/)
+
 ## License
 
 MIT
